@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+source "$(dirname "$0")/utils.sh"
+
+archive_path=""
+tmp_dir=""
+
+cleanup() {
+  if [[ -n "${archive_path:-}" && -f "$archive_path" ]]; then
+    rm -f "$archive_path"
+  fi
+
+  if [[ -n "${tmp_dir:-}" && -d "$tmp_dir" ]]; then
+    rm -rf "$tmp_dir"
+  fi
+}
+
+trap cleanup EXIT
+
+install_python() {
+  local install_type=$1
+  local version=$2
+  local install_path=$3
+
+  if [ "$install_type" != "version" ]; then
+    echoerr "Only version installs are supported."
+    exit 1
+  fi
+
+  read -r python_version release <<<"$(parse_version_and_release "$version")"
+  local target archive
+  target=$(detect_target_triple)
+  archive=$(archive_flavor)
+
+  info "Using target '${target}' and archive flavor '${archive}'."
+
+  local assets_json asset_name download_url
+  assets_json=$(release_assets_json "$release")
+  asset_name=$(select_asset_name "$assets_json" "$python_version" "$release" "$target" "$archive")
+  download_url="https://github.com/astral-sh/python-build-standalone/releases/download/${release}/${asset_name}"
+
+  info "Fetching ${asset_name}..."
+  case "$asset_name" in
+    *.tar.gz)
+      archive_path=$(mktemp "/tmp/python-standalone.XXXXXX")
+      archive_path="${archive_path}.tar.gz"
+      ;;
+    *.tar.zst|*.tar.zstd)
+      archive_path=$(mktemp "/tmp/python-standalone.XXXXXX")
+      archive_path="${archive_path}.tar.zst"
+      ;;
+    *)
+      echoerr "Unrecognized archive extension for ${asset_name}"
+      exit 1
+      ;;
+  esac
+  tmp_dir=$(mktemp -d /tmp/python-standalone.XXXXXX)
+
+  download_archive "$download_url" "$archive_path"
+
+  info "Extracting archive..."
+  extract_archive "$archive_path" "$tmp_dir"
+
+  if [ ! -d "${tmp_dir}/python" ]; then
+    echoerr "Unexpected archive layout: missing python/ directory."
+    exit 1
+  fi
+
+  mkdir -p "$install_path"
+  cp -a "${tmp_dir}/python/." "$install_path/"
+}
+
+install_default_python_packages() {
+  local packages_file
+  packages_file=$(default_packages_file)
+
+  if [ -f "$packages_file" ]; then
+    info "Installing default python packages from ${packages_file}..."
+    PATH="$ASDF_INSTALL_PATH/bin:$PATH" "$ASDF_INSTALL_PATH/bin/pip" install -U -r "$packages_file"
+  fi
+}
+
+install_python "$ASDF_INSTALL_TYPE" "$ASDF_INSTALL_VERSION" "$ASDF_INSTALL_PATH"
+install_default_python_packages

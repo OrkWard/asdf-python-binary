@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+source "$(dirname "$0")/utils.sh"
+
+list_all() {
+  local target archive release assets_json
+  target=$(detect_target_triple)
+  archive=$(archive_flavor)
+  release=$(latest_release_tag)
+
+  if [ -z "$release" ]; then
+    echoerr "Could not determine latest release tag."
+    exit 1
+  fi
+
+  assets_json=$(release_assets_json "$release")
+  extract_versions_for_target "$assets_json" "$target" "$archive"
+}
+
+list_all
