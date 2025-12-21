@@ -85,6 +85,31 @@ latest_release_tag() {
     | awk -F\" '/"tag"/ {print $4; exit}'
 }
 
+release_list_from_env() {
+  if [[ -z "${ASDF_PYTHON_STANDALONE_RELEASES:-}" ]]; then
+    return
+  fi
+
+  echo "$ASDF_PYTHON_STANDALONE_RELEASES" | tr ', ' '\n' | sed '/^$/d'
+}
+
+release_tags_to_search() {
+  local env_tags latest tags
+  env_tags=$(release_list_from_env)
+  if [[ -n "$env_tags" ]]; then
+    echo "$env_tags" | sed '/^$/d'
+    return
+  fi
+
+  latest=$(latest_release_tag)
+  if [[ -z "$latest" ]]; then
+    echoerr "Could not determine latest release tag."
+    exit 1
+  fi
+
+  echo "$latest"
+}
+
 release_assets_json() {
   local release=$1
   curl -fsSL "https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/${release}"

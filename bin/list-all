@@ -5,18 +5,23 @@ set -euo pipefail
 source "$(dirname "$0")/utils.sh"
 
 list_all() {
-  local target archive release assets_json
+  local target archive releases release assets_json
   target=$(detect_target_triple)
   archive=$(archive_flavor)
-  release=$(latest_release_tag)
+  releases=$(release_tags_to_search | sed '/^$/d' | uniq)
 
-  if [ -z "$release" ]; then
-    echoerr "Could not determine latest release tag."
+  if [ -z "$releases" ]; then
+    echoerr "No release tags to search."
     exit 1
   fi
 
-  assets_json=$(release_assets_json "$release")
-  extract_versions_for_target "$assets_json" "$target" "$archive"
+  local versions=""
+  while read -r release; do
+    assets_json=$(release_assets_json "$release")
+    versions+=$'\n'"$(extract_versions_for_target "$assets_json" "$target" "$archive")"
+  done <<<"$releases"
+
+  echo "$versions" | sed '/^$/d' | sort -V | uniq
 }
 
 list_all

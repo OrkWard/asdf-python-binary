@@ -33,6 +33,7 @@ After installation, the plugin will install packages from `$HOME/.default-python
 - `ASDF_PYTHON_STANDALONE_ARCHIVE`: choose the archive flavor. Supported values: `install_only` (default) or `install_only_stripped`.
 - `ASDF_PYTHON_STANDALONE_TARGET`: override the detected target triple (e.g. `x86_64-apple-darwin`).
 - `ASDF_PYTHON_STANDALONE_LIBC`: when on Linux, choose `gnu` (default) or `musl`.
+- `ASDF_PYTHON_STANDALONE_RELEASES`: comma-separated list of release tags to search (e.g. `20251217,20241105`). Use this to include older Python lines like 3.8 that are not present in the latest release.
 
 ### Notes
 
