@@ -16,13 +16,20 @@ List available versions for your platform (architecture and libc are auto-detect
 asdf list-all python
 ```
 
-Version identifiers include the python-build-standalone release tag. Example:
+Version identifiers can be specified in two formats:
 
-```sh
-asdf install python 3.12.1+20251217
-asdf global python 3.12.1+20251217
-python --version
-```
+1. Simple version (major.minor or major.minor.patch) - automatically uses the latest available build:
+   ```sh
+   asdf install python 3.13
+   asdf install python 3.12.1
+   ```
+
+2. Full version with build tag (major.minor.patch+build-date):
+   ```sh
+   asdf install python 3.12.1+20251217
+   asdf global python 3.12.1+20251217
+   python --version
+   ```
 
 ### Default packages
 
@@ -37,5 +44,7 @@ After installation, the plugin will install packages from `$HOME/.default-python
 
 ### Notes
 
+- Simple version formats (e.g., `3.13`, `3.12.1`) are now supported and will automatically use the latest available build
+- Full version format with build tag (e.g., `3.12.1+20251217`) is still supported for specific build selection
 - Builds are pulled from the latest python-build-standalone release.
 - Archives are extracted directly into the asdf install path; binaries live under `bin/` as usual.

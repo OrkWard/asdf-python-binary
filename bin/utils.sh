@@ -110,6 +110,39 @@ release_tags_to_search() {
   echo "$latest"
 }
 
+find_latest_build_for_version() {
+  local python_version=$1
+  local target=$(detect_target_triple)
+  local archive=$(archive_flavor)
+  local releases release assets_json latest_build=""
+
+  # Get all release tags to search
+  releases=$(release_tags_to_search | sed '/^$/d' | uniq)
+
+  if [ -z "$releases" ]; then
+    return
+  fi
+
+  # Search through releases to find the latest build for this version
+  while read -r release; do
+    assets_json=$(release_assets_json "$release")
+    # Check if this release contains our version
+    local version_found=$(echo "$assets_json" | asset_names_from_json | while read -r asset; do
+      if [[ "$asset" =~ ^cpython-${python_version}(\.[0-9A-Za-z0-9]+)?\+${release}-${target}-${archive}\.tar\.(gz|zst)$ ]]; then
+        echo "true"
+        break
+      fi
+    done)
+    
+    if [[ "$version_found" == "true" ]]; then
+      latest_build="$release"
+      break
+    fi
+  done <<<"$releases"
+
+  echo "$latest_build"
+}
+
 release_assets_json() {
   local release=$1
   curl -fsSL "https://api.github.com/repos/astral-sh/python-build-standalone/releases/tags/${release}"
@@ -122,12 +155,40 @@ asset_names_from_json() {
 parse_version_and_release() {
   local version=$1
 
+  # Handle full version with build: 3.12.1+20251217
   if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9A-Za-z0-9]+)\+([0-9]+)$ ]]; then
     echo "${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
-  else
-    echoerr "Invalid version '$version'. Expected format: <python-version>+<build-date> (e.g. 3.12.1+20251217)."
-    exit 1
+    return
   fi
+
+  # Handle simple version: 3.14 or 3.13
+  if [[ "$version" =~ ^([0-9]+\.[0-9]+)$ ]]; then
+    local python_version="${BASH_REMATCH[1]}"
+    local latest_release=$(find_latest_build_for_version "$python_version")
+    if [[ -n "$latest_release" ]]; then
+      echo "${python_version}.0 ${latest_release}"
+    else
+      echoerr "No build found for Python version '$python_version'."
+      exit 1
+    fi
+    return
+  fi
+
+  # Handle simple version with patch: 3.14.1
+  if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
+    local python_version="${BASH_REMATCH[1]}"
+    local latest_release=$(find_latest_build_for_version "$python_version")
+    if [[ -n "$latest_release" ]]; then
+      echo "${python_version} ${latest_release}"
+    else
+      echoerr "No build found for Python version '$python_version'."
+      exit 1
+    fi
+    return
+  fi
+
+  echoerr "Invalid version '$version'. Expected format: <python-version> or <python-version>+<build-date> (e.g. 3.14, 3.12.1, or 3.12.1+20251217)."
+  exit 1
 }
 
 asset_matches_selection() {

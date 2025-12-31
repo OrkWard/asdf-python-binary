@@ -21,7 +21,22 @@ list_all() {
     versions+=$'\n'"$(extract_versions_for_target "$assets_json" "$target" "$archive")"
   done <<<"$releases"
 
-  echo "$versions" | sed '/^$/d' | sort -V | uniq
+  # Get unique full versions and also generate simple versions
+  local full_versions simple_versions
+  full_versions=$(echo "$versions" | sed '/^$/d' | sort -V | uniq)
+  
+  # Extract simple versions (major.minor) from full versions
+  simple_versions=$(echo "$full_versions" | while read -r version; do
+    if [[ "$version" =~ ^([0-9]+\.[0-9]+)\. ]]; then
+      echo "${BASH_REMATCH[1]}"
+    fi
+  done | sort -V | uniq)
+
+  # Combine both full versions and simple versions
+  {
+    echo "$full_versions"
+    echo "$simple_versions"
+  } | sed '/^$/d' | sort -V | uniq
 }
 
 list_all
