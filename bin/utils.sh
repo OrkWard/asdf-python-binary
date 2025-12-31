@@ -110,6 +110,65 @@ release_tags_to_search() {
   echo "$latest"
 }
 
+find_latest_patch_version() {
+  local python_major_minor=$1
+  local target=$(detect_target_triple)
+  local archive=$(archive_flavor)
+  local releases release assets_json
+
+  # Get all release tags to search
+  releases=$(release_tags_to_search | sed '/^$/d' | uniq)
+
+  if [ -z "$releases" ]; then
+    return
+  fi
+
+  local latest_patch=""
+  local latest_release=""
+
+  # Search through releases to find the latest patch version
+  while read -r release; do
+    assets_json=$(release_assets_json "$release")
+    # Find all patch versions for this major.minor version
+    echo "$assets_json" | asset_names_from_json | while read -r asset; do
+      if [[ "$asset" =~ ^cpython-(${python_major_minor}\.[0-9A-Za-z0-9]+)\+${release}-${target}-${archive}\.tar\.(gz|zst)$ ]]; then
+        echo "${BASH_REMATCH[1]} $release"
+      fi
+    done
+  done <<<"$releases" | sort -V | tail -1
+}
+
+find_latest_build_for_exact_version() {
+  local python_version=$1
+  local target=$(detect_target_triple)
+  local archive=$(archive_flavor)
+  local releases release assets_json
+
+  # Get all release tags to search
+  releases=$(release_tags_to_search | sed '/^$/d' | uniq)
+
+  if [ -z "$releases" ]; then
+    return
+  fi
+
+  # Search through releases to find this exact version
+  while read -r release; do
+    assets_json=$(release_assets_json "$release")
+    # Check if this release contains our exact version
+    local version_found=$(echo "$assets_json" | asset_names_from_json | while read -r asset; do
+      if [[ "$asset" =~ ^cpython-${python_version}\+${release}-${target}-${archive}\.tar\.(gz|zst)$ ]]; then
+        echo "true"
+        break
+      fi
+    done)
+    
+    if [[ "$version_found" == "true" ]]; then
+      echo "$release"
+      return
+    fi
+  done <<<"$releases"
+}
+
 find_latest_build_for_version() {
   local python_version=$1
   local target=$(detect_target_triple)
@@ -163,12 +222,12 @@ parse_version_and_release() {
 
   # Handle simple version: 3.14 or 3.13
   if [[ "$version" =~ ^([0-9]+\.[0-9]+)$ ]]; then
-    local python_version="${BASH_REMATCH[1]}"
-    local latest_release=$(find_latest_build_for_version "$python_version")
-    if [[ -n "$latest_release" ]]; then
-      echo "${python_version}.0 ${latest_release}"
+    local python_major_minor="${BASH_REMATCH[1]}"
+    local version_and_release=$(find_latest_patch_version "$python_major_minor")
+    if [[ -n "$version_and_release" ]]; then
+      echo "$version_and_release"
     else
-      echoerr "No build found for Python version '$python_version'."
+      echoerr "No build found for Python version '$python_major_minor'."
       exit 1
     fi
     return
@@ -177,7 +236,8 @@ parse_version_and_release() {
   # Handle simple version with patch: 3.14.1
   if [[ "$version" =~ ^([0-9]+\.[0-9]+\.[0-9]+)$ ]]; then
     local python_version="${BASH_REMATCH[1]}"
-    local latest_release=$(find_latest_build_for_version "$python_version")
+    # Check if this specific patch version exists
+    local latest_release=$(find_latest_build_for_exact_version "$python_version")
     if [[ -n "$latest_release" ]]; then
       echo "${python_version} ${latest_release}"
     else
